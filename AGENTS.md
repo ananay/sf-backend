@@ -4,12 +4,13 @@ This repository contains the FastAPI service for the Contacts application. It us
 Pydantic for request and response contracts, SQLAlchemy for persistence, and pytest for
 API coverage. The default in-memory SQLite database makes the service self-contained;
 `CONTACTS_DATABASE_URL` can point to file-backed SQLite or Postgres when persistence is
-needed.
+needed. Install the `postgres` extra before using a `postgresql+psycopg://` URL.
 
 ## Working locally
 
 - Use Python 3.11 or newer.
 - Create an environment and install the project with `python -m pip install -e ".[dev]"`.
+- For Postgres support, install with `python -m pip install -e ".[dev,postgres]"`.
 - Start the API with `python -m app.main` or `uvicorn app.main:app --reload`.
 - Run the complete suite with `python -m pytest` before handing off a change.
 - Use the generated OpenAPI document at `/openapi.json` as the source of truth for the

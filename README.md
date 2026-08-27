@@ -73,7 +73,12 @@ seeded on startup so the API is never empty. To persist instead, point at a file
 CONTACTS_DATABASE_URL="sqlite+pysqlite:///./contacts.db" .venv/bin/python -m app.main
 ```
 
-The same code runs unchanged against Postgres (`postgresql+psycopg://...`).
+The same code runs against Postgres (`postgresql+psycopg://...`) after installing the
+driver extra:
+
+```bash
+.venv/bin/python -m pip install -e ".[postgres]"
+```
 
 ### Configuration
 
