@@ -2,7 +2,7 @@
 
 A self-contained Contacts REST API built with **FastAPI** + **SQLAlchemy**, backed by an
 **in-memory SQLite database** by default. No external database, container, or migration
-step is needed — start the process and the API is ready.
+step is needed; start the process and the API is ready.
 
 ## Quickstart
 
@@ -27,8 +27,8 @@ served:
 
 | URL | What it is |
 | --- | --- |
-| <http://127.0.0.1:8000/docs> | **Swagger UI** — browse endpoints and send real requests from the browser |
-| <http://127.0.0.1:8000/redoc> | **ReDoc** — read-only reference, easier for reading schemas end to end |
+| <http://127.0.0.1:8000/docs> | **Swagger UI:** browse endpoints and send real requests from the browser |
+| <http://127.0.0.1:8000/redoc> | **ReDoc:** read-only reference, easier for reading schemas end to end |
 | <http://127.0.0.1:8000/openapi.json> | Raw OpenAPI 3.1 schema, for client generators and Postman/Insomnia imports |
 
 If you changed `CONTACTS_HOST` or `CONTACTS_PORT`, substitute those instead.
@@ -36,14 +36,14 @@ If you changed `CONTACTS_HOST` or `CONTACTS_PORT`, substitute those instead.
 ### Trying a request in Swagger UI
 
 1. Expand an endpoint, e.g. `POST /api/v1/contacts`.
-2. Click **Try it out** — the request body becomes editable and is pre-filled with an
+2. Click **Try it out**; the request body becomes editable and is pre-filled with an
    example.
 3. Edit the JSON and click **Execute**.
 4. The response status, body, and headers appear below, along with the equivalent
    `curl` command you can copy.
 
 Since the default database is seeded on startup, `GET /api/v1/contacts` returns three
-contacts immediately — a good first call to confirm things work. Anything you create
+contacts immediately. That is a good first call to confirm things work. Anything you create
 through the UI lives only until the process exits.
 
 ### Reading the schemas
@@ -51,7 +51,7 @@ through the UI lives only until the process exits.
 Both UIs list every model under **Schemas** (ReDoc) or **Schemas** at the bottom of the
 page (Swagger UI). `ContactCreate`, `ContactReplace` (PUT), `ContactUpdate` (PATCH),
 `ContactRead`, and `ContactPage` show exactly which fields are required, which are
-nullable, and the validation rules — the same constraints described in
+nullable, and the validation rules. These are the same constraints described in
 [Contact fields](#contact-fields) below. Endpoints are grouped
 by the tags declared in `app/main.py`, and each documents its error responses (`404`,
 `409`, `422`) with example payloads.
@@ -64,7 +64,7 @@ pass `docs_url=None` / `redoc_url=None` to `FastAPI(...)` in `app/main.py`.
 `CONTACTS_DATABASE_URL` defaults to `sqlite+pysqlite:///:memory:`. A plain in-memory
 SQLite database normally dies with the connection that opened it, so `app/database.py`
 uses SQLAlchemy's `StaticPool` to hold one connection open for the process's lifetime.
-Every request — including ones FastAPI runs on a worker thread — sees the same data.
+Every request, including ones FastAPI runs on a worker thread, sees the same data.
 
 **Data is lost when the process exits.** Because of that, three sample contacts are
 seeded on startup so the API is never empty. To persist instead, point at a file:
@@ -162,6 +162,9 @@ curl -X DELETE http://127.0.0.1:8000/api/v1/contacts/1
 
 Tests run against their own empty in-memory database with seeding disabled
 (see `tests/conftest.py`).
+
+GitHub Actions runs the full suite on Python 3.11 through 3.14 for every pull request
+and every push to `trunk`.
 
 ## Layout
 
