@@ -49,6 +49,15 @@ def test_legacy_addresses_are_backfilled_once() -> None:
                 """
             )
         ).mappings().all()
+        migration_count = connection.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM contacts_schema_migrations
+                WHERE name = 'normalize_contact_addresses_v1'
+                """
+            )
+        ).scalar_one()
 
     assert [dict(row) for row in rows] == [
         {
@@ -66,3 +75,4 @@ def test_legacy_addresses_are_backfilled_once() -> None:
             "country": "UK",
         },
     ]
+    assert migration_count == 1

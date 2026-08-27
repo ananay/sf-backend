@@ -55,15 +55,16 @@ def init_db() -> None:
 
 _LEGACY_ADDRESS_COLUMNS = {"address", "city", "state", "postal_code", "country"}
 _MISSING_LEGACY_STREET = "(street not provided in legacy data)"
+_ADDRESS_MIGRATION = "normalize_contact_addresses_v1"
 
 
 def _migrate_legacy_addresses(target_engine: Engine) -> None:
     """Copy pre-normalization contact addresses into owned address rows.
 
     The migration is intentionally additive: legacy columns remain in place, and
-    a contact is backfilled only while it has no normalized addresses. This makes
-    startup retries safe on both SQLite and PostgreSQL without requiring a
-    database-specific migration framework for the starter project.
+    a contact is backfilled only while it has no normalized addresses. A unique,
+    transactional migration claim ensures concurrent application processes cannot
+    both perform the backfill.
     """
     inspector = inspect(target_engine)
     if not {"contacts", "addresses"}.issubset(inspector.get_table_names()):
@@ -73,7 +74,7 @@ def _migrate_legacy_addresses(target_engine: Engine) -> None:
     if not _LEGACY_ADDRESS_COLUMNS.issubset(contact_columns):
         return
 
-    statement = text(
+    backfill = text(
         """
         INSERT INTO addresses
             (contact_id, type, address, city, state, postal_code, country)
@@ -102,7 +103,30 @@ def _migrate_legacy_addresses(target_engine: Engine) -> None:
         """
     )
     with target_engine.begin() as connection:
-        connection.execute(statement, {"missing_street": _MISSING_LEGACY_STREET})
+        connection.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS contacts_schema_migrations (
+                    name VARCHAR(255) PRIMARY KEY
+                )
+                """
+            )
+        )
+
+    with target_engine.begin() as connection:
+        claim = connection.execute(
+            text(
+                """
+                INSERT INTO contacts_schema_migrations (name)
+                VALUES (:name)
+                ON CONFLICT (name) DO NOTHING
+                """
+            ),
+            {"name": _ADDRESS_MIGRATION},
+        )
+        if claim.rowcount != 1:
+            return
+        connection.execute(backfill, {"missing_street": _MISSING_LEGACY_STREET})
 
 
 def get_db() -> Generator[Session, None, None]:
