@@ -10,9 +10,15 @@ SAMPLE_CONTACTS = [
         phone="+1-415-555-0101",
         company="Analytical Engines",
         job_title="Mathematician",
-        city="San Francisco",
-        state="CA",
-        country="USA",
+        addresses=[
+            {
+                "type": "Work",
+                "address": "1 Market St",
+                "city": "San Francisco",
+                "state": "CA",
+                "country": "USA",
+            }
+        ],
         notes="First programmer.",
     ),
     ContactCreate(
@@ -22,9 +28,9 @@ SAMPLE_CONTACTS = [
         phone="+1-415-555-0102",
         company="US Navy",
         job_title="Rear Admiral",
-        city="Arlington",
-        state="VA",
-        country="USA",
+        addresses=[
+            {"type": "Work", "address": "The Pentagon", "city": "Arlington", "state": "VA", "country": "USA"}
+        ],
     ),
     ContactCreate(
         first_name="Alan",
@@ -33,8 +39,9 @@ SAMPLE_CONTACTS = [
         phone="+44-20-5555-0103",
         company="Bletchley Park",
         job_title="Cryptanalyst",
-        city="London",
-        country="UK",
+        addresses=[
+            {"type": "Work", "address": "Bletchley Park", "city": "Milton Keynes", "country": "UK"}
+        ],
     ),
 ]
 
