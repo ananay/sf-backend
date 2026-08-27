@@ -1,4 +1,5 @@
 BASE = "/api/v1/contacts"
+PNG_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
 
 
 def test_health(client):
@@ -17,6 +18,21 @@ def test_create_contact(client, payload):
     assert body["email"] == "ada@example.com"
     assert body["full_name"] == "Ada Lovelace"
     assert body["created_at"] and body["updated_at"]
+
+
+def test_create_contact_with_photo(client, payload):
+    response = client.post(BASE, json={**payload, "photo": PNG_DATA_URI})
+
+    assert response.status_code == 201
+    assert response.json()["photo"] == PNG_DATA_URI
+
+
+def test_create_rejects_invalid_photo(client, payload):
+    wrong_type = "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+    mismatched_content = "data:image/png;base64,SGVsbG8="
+
+    assert client.post(BASE, json={**payload, "photo": wrong_type}).status_code == 422
+    assert client.post(BASE, json={**payload, "photo": mismatched_content}).status_code == 422
 
 
 def test_create_requires_valid_email(client, payload):
@@ -99,6 +115,18 @@ def test_patch_updates_only_sent_fields(client, payload):
     assert body["phone"] == "+1-000-000-0000"
     assert body["first_name"] == "Ada"
     assert body["company"] == "Analytical Engines"
+
+
+def test_photo_can_be_added_and_cleared_with_patch(client, payload):
+    contact_id = client.post(BASE, json=payload).json()["id"]
+
+    added = client.patch(f"{BASE}/{contact_id}", json={"photo": PNG_DATA_URI})
+    cleared = client.patch(f"{BASE}/{contact_id}", json={"photo": None})
+
+    assert added.status_code == 200
+    assert added.json()["photo"] == PNG_DATA_URI
+    assert cleared.status_code == 200
+    assert cleared.json()["photo"] is None
 
 
 def test_patch_duplicate_email_conflicts(client, payload):
