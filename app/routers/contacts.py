@@ -3,6 +3,11 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
+from app.linkedin import (
+    LinkedInProfileNotFoundError,
+    LinkedInVerificationError,
+    verify_linkedin_profile,
+)
 from app.models import Contact
 from app.schemas import (
     ContactCreate,
@@ -27,6 +32,15 @@ EMAIL_CONFLICT = {
     "description": "Another contact already uses that email address.",
     "content": {"application/json": {"example": {"detail": "Email ada@example.com is already in use"}}},
 }
+LINKEDIN_UNAVAILABLE = {
+    "model": ErrorResponse,
+    "description": "LinkedIn could not be reached to verify the supplied profile URL.",
+    "content": {
+        "application/json": {
+            "example": {"detail": "LinkedIn could not be reached to verify this profile"}
+        }
+    },
+}
 
 
 def _get_or_404(db: Session, contact_id: int) -> Contact:
@@ -42,6 +56,26 @@ def _reject_duplicate_email(db: Session, email: str, *, exclude_id: int | None =
         raise HTTPException(status.HTTP_409_CONFLICT, f"Email {email} is already in use")
 
 
+async def _verify_linkedin_or_422(linkedin_url: str) -> None:
+    """Verify a normalized LinkedIn URL and translate failures into API errors."""
+    try:
+        await verify_linkedin_profile(linkedin_url)
+    except LinkedInProfileNotFoundError as error:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=[
+                {
+                    "type": "value_error",
+                    "loc": ["body", "linkedin_url"],
+                    "msg": str(error),
+                    "input": linkedin_url,
+                }
+            ],
+        ) from error
+    except LinkedInVerificationError as error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
+
+
 @router.post(
     "",
     response_model=ContactRead,
@@ -49,17 +83,22 @@ def _reject_duplicate_email(db: Session, email: str, *, exclude_id: int | None =
     operation_id="createContact",
     summary="Create a contact",
     response_description="The stored contact, including its new id and timestamps.",
-    responses={status.HTTP_409_CONFLICT: EMAIL_CONFLICT},
+    responses={
+        status.HTTP_409_CONFLICT: EMAIL_CONFLICT,
+        status.HTTP_503_SERVICE_UNAVAILABLE: LINKEDIN_UNAVAILABLE,
+    },
 )
-def create_contact(payload: ContactCreate, db: Session = Depends(get_db)) -> Contact:
+async def create_contact(payload: ContactCreate, db: Session = Depends(get_db)) -> Contact:
     """
     Store a new contact.
 
-    `first_name`, `last_name`, and `email` are required; every other field is
-    optional. The email must be unique — a duplicate (compared case-insensitively)
-    is rejected with `409 Conflict` rather than creating a second record.
+    Names, email, and a live LinkedIn profile URL are required; every other field
+    is optional. The email must be unique — a duplicate (compared
+    case-insensitively) is rejected with `409 Conflict` rather than creating a
+    second record.
     """
     _reject_duplicate_email(db, payload.email)
+    await _verify_linkedin_or_422(payload.linkedin_url)
     return crud.create_contact(db, payload)
 
 
@@ -76,7 +115,7 @@ def list_contacts(
         default=None,
         description=(
             "Case-insensitive substring match against first name, last name, "
-            "email, company, and phone. Omit to return everything."
+            "email, LinkedIn URL, company, and phone. Omit to return everything."
         ),
         examples=["lovelace"],
     ),
@@ -127,9 +166,13 @@ def get_contact(contact_id: int = CONTACT_ID, db: Session = Depends(get_db)) -> 
     operation_id="replaceContact",
     summary="Replace a contact",
     response_description="The contact after replacement.",
-    responses={status.HTTP_404_NOT_FOUND: NOT_FOUND, status.HTTP_409_CONFLICT: EMAIL_CONFLICT},
+    responses={
+        status.HTTP_404_NOT_FOUND: NOT_FOUND,
+        status.HTTP_409_CONFLICT: EMAIL_CONFLICT,
+        status.HTTP_503_SERVICE_UNAVAILABLE: LINKEDIN_UNAVAILABLE,
+    },
 )
-def replace_contact(
+async def replace_contact(
     payload: ContactReplace,
     contact_id: int = CONTACT_ID,
     db: Session = Depends(get_db),
@@ -142,6 +185,7 @@ def replace_contact(
     """
     contact = _get_or_404(db, contact_id)
     _reject_duplicate_email(db, payload.email, exclude_id=contact_id)
+    await _verify_linkedin_or_422(payload.linkedin_url)
     return crud.replace_contact(db, contact, payload)
 
 
@@ -151,9 +195,13 @@ def replace_contact(
     operation_id="updateContact",
     summary="Partially update a contact",
     response_description="The contact after the update.",
-    responses={status.HTTP_404_NOT_FOUND: NOT_FOUND, status.HTTP_409_CONFLICT: EMAIL_CONFLICT},
+    responses={
+        status.HTTP_404_NOT_FOUND: NOT_FOUND,
+        status.HTTP_409_CONFLICT: EMAIL_CONFLICT,
+        status.HTTP_503_SERVICE_UNAVAILABLE: LINKEDIN_UNAVAILABLE,
+    },
 )
-def update_contact(
+async def update_contact(
     payload: ContactUpdate,
     contact_id: int = CONTACT_ID,
     db: Session = Depends(get_db),
@@ -166,6 +214,8 @@ def update_contact(
     returns `409 Conflict`.
     """
     contact = _get_or_404(db, contact_id)
+    if "linkedin_url" in payload.model_fields_set and payload.linkedin_url is not None:
+        await _verify_linkedin_or_422(payload.linkedin_url)
     if payload.email is not None:
         _reject_duplicate_email(db, payload.email, exclude_id=contact_id)
     return crud.update_contact(db, contact, payload)

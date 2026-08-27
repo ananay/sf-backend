@@ -47,6 +47,7 @@ def list_contacts(
                 func.lower(Contact.first_name).like(pattern),
                 func.lower(Contact.last_name).like(pattern),
                 func.lower(Contact.email).like(pattern),
+                func.lower(func.coalesce(Contact.linkedin_url, "")).like(pattern),
                 func.lower(func.coalesce(Contact.company, "")).like(pattern),
                 func.lower(func.coalesce(Contact.phone, "")).like(pattern),
             )
