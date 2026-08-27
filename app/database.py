@@ -50,7 +50,22 @@ def init_db() -> None:
     from app import models  # noqa: F401  (register models on Base.metadata)
 
     Base.metadata.create_all(bind=engine)
+    _ensure_photo_column(engine)
     _migrate_legacy_addresses(engine)
+
+
+def _ensure_photo_column(target_engine: Engine) -> None:
+    """Add the nullable photo column to databases created before this feature."""
+    inspector = inspect(target_engine)
+    if "contacts" not in inspector.get_table_names():
+        return
+    if "photo" in {column["name"] for column in inspector.get_columns("contacts")}:
+        return
+
+    # The identifier and type are static, and this form is portable across
+    # SQLite and PostgreSQL—the two documented database configurations.
+    with target_engine.begin() as connection:
+        connection.execute(text("ALTER TABLE contacts ADD COLUMN photo TEXT"))
 
 
 _LEGACY_ADDRESS_COLUMNS = {"address", "city", "state", "postal_code", "country"}

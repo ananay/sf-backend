@@ -1,8 +1,50 @@
+import base64
+import binascii
+import re
 from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
 
 from app.models import AddressType
+
+
+MAX_PHOTO_BYTES = 2 * 1024 * 1024
+MAX_PHOTO_DATA_URI_LENGTH = 4 * ((MAX_PHOTO_BYTES + 2) // 3) + 32
+SUPPORTED_PHOTO_MEDIA_TYPES = ("image/jpeg", "image/png", "image/webp")
+_PHOTO_DATA_URI = re.compile(
+    r"^data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$"
+)
+
+
+def _validate_photo(value: str | None) -> str | None:
+    """Validate an optional, size-bounded image data URI."""
+    if value is None:
+        return None
+
+    match = _PHOTO_DATA_URI.fullmatch(value)
+    if match is None:
+        raise ValueError(
+            "photo must be a base64 JPEG, PNG, or WebP data URI"
+        )
+
+    media_type, encoded = match.groups()
+    try:
+        image = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise ValueError("photo contains invalid base64 data") from error
+
+    if len(image) > MAX_PHOTO_BYTES:
+        raise ValueError("photo must be 2 MB or smaller")
+
+    signatures_match = {
+        "image/jpeg": image.startswith(b"\xff\xd8\xff"),
+        "image/png": image.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/webp": image.startswith(b"RIFF") and image[8:12] == b"WEBP",
+    }
+    if not signatures_match[media_type]:
+        raise ValueError("photo content does not match its declared image type")
+
+    return value
 
 
 class AddressBase(BaseModel):
@@ -92,6 +134,13 @@ class ContactBase(BaseModel):
         description="Free-form notes about the contact. No length limit.",
         examples=["Met at the SF hackathon."],
     )
+    photo: str | None = Field(
+        default=None,
+        max_length=MAX_PHOTO_DATA_URI_LENGTH,
+        description="Contact photo as a base64 JPEG, PNG, or WebP data URI (maximum 2 MB).",
+    )
+
+    _valid_photo = field_validator("photo")(_validate_photo)
 
 
 _FULL_EXAMPLE = {
@@ -112,6 +161,7 @@ _FULL_EXAMPLE = {
         }
     ],
     "notes": "Met at the SF hackathon.",
+    "photo": None,
 }
 _MINIMAL_EXAMPLE = {"first_name": "Grace", "last_name": "Hopper", "email": "grace@example.com"}
 
@@ -162,6 +212,13 @@ class ContactUpdate(BaseModel):
         description="Replacement address list. Send an empty list or null to clear all addresses.",
     )
     notes: str | None = Field(default=None, description="New notes; replaces the existing text.")
+    photo: str | None = Field(
+        default=None,
+        max_length=MAX_PHOTO_DATA_URI_LENGTH,
+        description="New contact photo as a base64 JPEG, PNG, or WebP data URI (maximum 2 MB).",
+    )
+
+    _valid_photo = field_validator("photo")(_validate_photo)
 
 
 class ContactRead(ContactBase):

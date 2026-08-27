@@ -33,6 +33,7 @@ class Contact(Base):
     job_title: Mapped[str | None] = mapped_column(String(200))
 
     notes: Mapped[str | None] = mapped_column(Text)
+    photo: Mapped[str | None] = mapped_column(Text)
 
     addresses: Mapped[list["Address"]] = relationship(
         back_populates="contact",
