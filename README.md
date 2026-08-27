@@ -108,13 +108,15 @@ also read):
 
 ### Contact fields
 
-`first_name` and `last_name` are required; `email` is required and unique
-(case-insensitive). Everything else is optional. A contact owns up to ten
-typed addresses. Each address requires a `type` (`Home`, `Work`, or `Other`)
-and a non-blank street `address`; its remaining postal fields are optional.
+`first_name`, `last_name`, and `linkedin_url` are required; `email` is required
+and unique (case-insensitive). LinkedIn URLs must use the canonical public-profile
+shape (`https://www.linkedin.com/in/profile-name`). The API normalizes the URL and
+checks LinkedIn before saving, rejecting confirmed `404`/`410` profiles. A contact
+also owns up to ten typed addresses. Each address requires a `type` (`Home`, `Work`,
+or `Other`) and a non-blank street `address`; its remaining postal fields are optional.
 
 ```
-first_name, last_name, email, phone, company, job_title,
+first_name, last_name, email, linkedin_url, phone, company, job_title,
 addresses: [{ type, address, city, state, postal_code, country }], notes
 ```
 
@@ -127,7 +129,7 @@ an `id` to every address and add `id`, `full_name`, `created_at`, and
 
 | Param | Default | Notes |
 | --- | --- | --- |
-| `search` | – | Case-insensitive substring match on name, email, company, phone |
+| `search` | – | Case-insensitive substring match on name, email, LinkedIn URL, company, phone |
 | `limit` | `50` | 1–200 |
 | `offset` | `0` | |
 | `sort_by` | `id` | `id`, `first_name`, `last_name`, `email`, `company`, `created_at`, `updated_at` |
@@ -142,7 +144,8 @@ List responses are wrapped so clients can paginate:
 ### Status codes
 
 `201` created · `204` deleted · `404` unknown id · `409` duplicate email ·
-`422` validation error (bad email, blank name, invalid `sort_by`)
+`422` validation error (including malformed or missing LinkedIn profiles) ·
+`503` LinkedIn verification temporarily unavailable
 
 ## Examples
 
@@ -151,6 +154,7 @@ List responses are wrapped so clients can paginate:
 curl -X POST http://127.0.0.1:8000/api/v1/contacts \
   -H 'content-type: application/json' \
   -d '{"first_name":"Katherine","last_name":"Johnson","email":"katherine@example.com",
+       "linkedin_url":"https://www.linkedin.com/in/katherine-johnson",
        "phone":"+1-757-555-0199","company":"NASA","job_title":"Mathematician",
        "addresses":[{"type":"Work","address":"1 NASA Dr","city":"Hampton",
                      "state":"VA","postal_code":"23666","country":"USA"}]}'
@@ -185,6 +189,7 @@ app/
   main.py             FastAPI app, lifespan startup, /health and /
   config.py           Environment-driven settings
   database.py         Engine, session factory, StaticPool in-memory wiring
+  linkedin.py         LinkedIn URL normalization and availability verification
   models.py           Contact ORM model
   schemas.py          Pydantic request/response models
   crud.py             Database operations (search, sort, paginate)

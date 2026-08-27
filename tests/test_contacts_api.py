@@ -69,6 +69,72 @@ def test_create_requires_names(client, payload):
     assert response.status_code == 422
 
 
+def test_create_requires_linkedin_url(client, payload, linkedin_verifier):
+    response = client.post(
+        BASE,
+        json={
+            key: value for key, value in payload.items() if key != "linkedin_url"
+        },
+    )
+    assert response.status_code == 422
+    linkedin_verifier.assert_not_awaited()
+
+
+def test_create_normalizes_and_verifies_linkedin_url(client, payload, linkedin_verifier):
+    response = client.post(
+        BASE,
+        json={
+            **payload,
+            "linkedin_url": " https://linkedin.com/in/Ada-Lovelace/?trk=contact ",
+        },
+    )
+    assert response.status_code == 201
+    expected = "https://www.linkedin.com/in/ada-lovelace"
+    assert response.json()["linkedin_url"] == expected
+    linkedin_verifier.assert_awaited_once_with(expected)
+
+
+def test_create_rejects_malformed_linkedin_urls(client, payload, linkedin_verifier):
+    invalid_urls = [
+        "",
+        "https://example.com/in/ada-lovelace",
+        "https://www.linkedin.com/company/openai",
+    ]
+    for index, linkedin_url in enumerate(invalid_urls):
+        response = client.post(
+            BASE,
+            json={**payload, "email": f"ada{index}@example.com", "linkedin_url": linkedin_url},
+        )
+        assert response.status_code == 422
+    linkedin_verifier.assert_not_awaited()
+
+
+def test_create_rejects_confirmed_missing_linkedin_profile(
+    client, payload, linkedin_verifier
+):
+    from app.linkedin import LinkedInProfileNotFoundError
+
+    linkedin_verifier.side_effect = LinkedInProfileNotFoundError(
+        "LinkedIn profile was not found"
+    )
+    response = client.post(BASE, json=payload)
+    assert response.status_code == 422
+    issue = response.json()["detail"][0]
+    assert issue["loc"] == ["body", "linkedin_url"]
+
+
+def test_create_fails_closed_when_linkedin_is_unreachable(
+    client, payload, linkedin_verifier
+):
+    from app.linkedin import LinkedInVerificationError
+
+    linkedin_verifier.side_effect = LinkedInVerificationError(
+        "LinkedIn could not be reached to verify this profile"
+    )
+    response = client.post(BASE, json=payload)
+    assert response.status_code == 503
+
+
 def test_duplicate_email_conflicts(client, payload):
     assert client.post(BASE, json=payload).status_code == 201
     response = client.post(BASE, json={**payload, "email": "ADA@example.com"})
@@ -167,6 +233,44 @@ def test_photo_can_be_added_and_cleared_with_patch(client, payload):
     assert cleared.json()["photo"] is None
 
 
+def test_patch_rejects_empty_linkedin_url(client, payload, linkedin_verifier):
+    contact_id = client.post(BASE, json=payload).json()["id"]
+    linkedin_verifier.reset_mock()
+
+    assert client.patch(f"{BASE}/{contact_id}", json={"linkedin_url": ""}).status_code == 422
+    assert client.patch(f"{BASE}/{contact_id}", json={"linkedin_url": None}).status_code == 422
+    linkedin_verifier.assert_not_awaited()
+
+
+def test_patch_normalizes_and_verifies_linkedin_url(
+    client, payload, linkedin_verifier
+):
+    contact_id = client.post(BASE, json=payload).json()["id"]
+    linkedin_verifier.reset_mock()
+
+    response = client.patch(
+        f"{BASE}/{contact_id}",
+        json={"linkedin_url": "https://linkedin.com/in/Grace-Hopper/?trk=contact"},
+    )
+    expected = "https://www.linkedin.com/in/grace-hopper"
+    assert response.status_code == 200
+    assert response.json()["linkedin_url"] == expected
+    linkedin_verifier.assert_awaited_once_with(expected)
+
+
+def test_patch_other_fields_does_not_reverify_linkedin(
+    client, payload, linkedin_verifier
+):
+    contact_id = client.post(BASE, json=payload).json()["id"]
+    linkedin_verifier.reset_mock()
+
+    response = client.patch(
+        f"{BASE}/{contact_id}", json={"company": "New company"}
+    )
+    assert response.status_code == 200
+    linkedin_verifier.assert_not_awaited()
+
+
 def test_patch_duplicate_email_conflicts(client, payload):
     first = client.post(BASE, json=payload).json()["id"]
     client.post(BASE, json={**payload, "email": "grace@example.com"})
@@ -184,7 +288,12 @@ def test_put_replaces_contact(client, payload):
     contact_id = client.post(BASE, json=payload).json()["id"]
     response = client.put(
         f"{BASE}/{contact_id}",
-        json={"first_name": "Grace", "last_name": "Hopper", "email": "grace@example.com"},
+        json={
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "email": "grace@example.com",
+            "linkedin_url": "https://www.linkedin.com/in/grace-hopper",
+        },
     )
     assert response.status_code == 200
     body = response.json()
@@ -195,7 +304,12 @@ def test_put_replaces_contact(client, payload):
 def test_put_missing_contact_returns_404(client):
     response = client.put(
         f"{BASE}/9999",
-        json={"first_name": "A", "last_name": "B", "email": "ab@example.com"},
+        json={
+            "first_name": "A",
+            "last_name": "B",
+            "email": "ab@example.com",
+            "linkedin_url": "https://www.linkedin.com/in/example-profile",
+        },
     )
     assert response.status_code == 404
 

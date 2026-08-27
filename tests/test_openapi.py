@@ -138,7 +138,12 @@ def test_request_bodies_carry_examples(spec):
     create = spec["components"]["schemas"]["ContactCreate"]
     assert len(create["examples"]) == 2
     assert create["examples"][0]["email"] == "ada@example.com"
-    assert set(create["required"]) == {"first_name", "last_name", "email"}
+    assert set(create["required"]) == {
+        "first_name",
+        "last_name",
+        "email",
+        "linkedin_url",
+    }
 
     patch = spec["components"]["schemas"]["ContactUpdate"]
     assert patch["examples"]

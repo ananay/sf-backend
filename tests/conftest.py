@@ -5,6 +5,8 @@ from collections.abc import Iterator
 os.environ["CONTACTS_DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 os.environ["CONTACTS_SEED_DATA"] = "false"
 
+from unittest.mock import AsyncMock
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -26,6 +28,7 @@ def payload() -> dict:
         "first_name": "Ada",
         "last_name": "Lovelace",
         "email": "ada@example.com",
+        "linkedin_url": "https://www.linkedin.com/in/ada-lovelace",
         "phone": "+1-415-555-0101",
         "company": "Analytical Engines",
         "job_title": "Mathematician",
@@ -41,3 +44,11 @@ def payload() -> dict:
         ],
         "notes": "First programmer.",
     }
+
+
+@pytest.fixture(autouse=True)
+def linkedin_verifier(monkeypatch) -> AsyncMock:
+    """Avoid real LinkedIn requests in API tests while exposing call assertions."""
+    verifier = AsyncMock(return_value=None)
+    monkeypatch.setattr("app.routers.contacts.verify_linkedin_profile", verifier)
+    return verifier

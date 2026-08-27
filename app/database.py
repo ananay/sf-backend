@@ -51,6 +51,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_photo_column(engine)
+    _ensure_linkedin_column(engine)
     _migrate_legacy_addresses(engine)
 
 
@@ -142,6 +143,18 @@ def _migrate_legacy_addresses(target_engine: Engine) -> None:
         if claim.rowcount != 1:
             return
         connection.execute(backfill, {"missing_street": _MISSING_LEGACY_STREET})
+
+
+def _ensure_linkedin_column(database_engine: Engine) -> None:
+    """Add the nullable LinkedIn column to databases created by earlier versions."""
+    inspector = inspect(database_engine)
+    if "contacts" not in inspector.get_table_names():
+        return
+    if "linkedin_url" in {column["name"] for column in inspector.get_columns("contacts")}:
+        return
+
+    with database_engine.begin() as connection:
+        connection.execute(text("ALTER TABLE contacts ADD COLUMN linkedin_url VARCHAR(500)"))
 
 
 def get_db() -> Generator[Session, None, None]:

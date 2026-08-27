@@ -3,10 +3,17 @@ import binascii
 import re
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_validator,
+)
 
+from app.linkedin import LINKEDIN_URL_MAX_LENGTH, normalize_linkedin_url
 from app.models import AddressType
-
 
 MAX_PHOTO_BYTES = 2 * 1024 * 1024
 MAX_PHOTO_DATA_URI_LENGTH = 4 * ((MAX_PHOTO_BYTES + 2) // 3) + 32
@@ -106,6 +113,11 @@ class ContactBase(BaseModel):
         ),
         examples=["ada@example.com"],
     )
+    linkedin_url: str = Field(
+        max_length=LINKEDIN_URL_MAX_LENGTH,
+        description="Required canonical HTTPS URL for the contact's public LinkedIn profile.",
+        examples=["https://www.linkedin.com/in/ada-lovelace"],
+    )
     phone: str | None = Field(
         default=None,
         max_length=40,
@@ -142,11 +154,19 @@ class ContactBase(BaseModel):
 
     _valid_photo = field_validator("photo")(_validate_photo)
 
+    @field_validator("linkedin_url", mode="before")
+    @classmethod
+    def _normalize_linkedin_url(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        return normalize_linkedin_url(value)
+
 
 _FULL_EXAMPLE = {
     "first_name": "Ada",
     "last_name": "Lovelace",
     "email": "ada@example.com",
+    "linkedin_url": "https://www.linkedin.com/in/ada-lovelace",
     "phone": "+1-415-555-0101",
     "company": "Analytical Engines",
     "job_title": "Mathematician",
@@ -163,11 +183,16 @@ _FULL_EXAMPLE = {
     "notes": "Met at the SF hackathon.",
     "photo": None,
 }
-_MINIMAL_EXAMPLE = {"first_name": "Grace", "last_name": "Hopper", "email": "grace@example.com"}
+_MINIMAL_EXAMPLE = {
+    "first_name": "Grace",
+    "last_name": "Hopper",
+    "email": "grace@example.com",
+    "linkedin_url": "https://www.linkedin.com/in/grace-hopper",
+}
 
 
 class ContactCreate(ContactBase):
-    """Body of `POST /api/v1/contacts`. Only the two names and email are required."""
+    """Body of `POST /api/v1/contacts`. Names, email, and LinkedIn URL are required."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [_FULL_EXAMPLE, _MINIMAL_EXAMPLE]})
 
@@ -203,6 +228,11 @@ class ContactUpdate(BaseModel):
         max_length=320,
         description="New email address. Must not belong to another contact.",
     )
+    linkedin_url: str | None = Field(
+        default=None,
+        max_length=LINKEDIN_URL_MAX_LENGTH,
+        description="New LinkedIn profile URL. Explicit null and blank values are rejected.",
+    )
     phone: str | None = Field(default=None, max_length=40, description="New phone number.")
     company: str | None = Field(default=None, max_length=200, description="New company.")
     job_title: str | None = Field(default=None, max_length=200, description="New job title.")
@@ -219,6 +249,11 @@ class ContactUpdate(BaseModel):
     )
 
     _valid_photo = field_validator("photo")(_validate_photo)
+
+    @field_validator("linkedin_url", mode="before")
+    @classmethod
+    def _normalize_linkedin_url(cls, value: object) -> str:
+        return normalize_linkedin_url(value)
 
 
 class ContactRead(ContactBase):
@@ -240,6 +275,10 @@ class ContactRead(ContactBase):
     )
 
     id: int = Field(description="Server-assigned identifier.", examples=[1])
+    linkedin_url: str | None = Field(
+        default=None,
+        description="Canonical LinkedIn profile URL, or null for a legacy contact.",
+    )
     created_at: datetime = Field(
         description="UTC timestamp of when the contact was created.",
         examples=["2026-08-19T16:22:58.189507Z"],
