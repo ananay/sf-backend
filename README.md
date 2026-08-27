@@ -2,7 +2,7 @@
 
 A self-contained Contacts REST API built with **FastAPI** + **SQLAlchemy**, backed by an
 **in-memory SQLite database** by default. No external database, container, or migration
-step is needed — start the process and the API is ready.
+step is needed; start the process and the API is ready.
 
 ## Quickstart
 
@@ -27,8 +27,8 @@ served:
 
 | URL | What it is |
 | --- | --- |
-| <http://127.0.0.1:8000/docs> | **Swagger UI** — browse endpoints and send real requests from the browser |
-| <http://127.0.0.1:8000/redoc> | **ReDoc** — read-only reference, easier for reading schemas end to end |
+| <http://127.0.0.1:8000/docs> | **Swagger UI:** browse endpoints and send real requests from the browser |
+| <http://127.0.0.1:8000/redoc> | **ReDoc:** read-only reference, easier for reading schemas end to end |
 | <http://127.0.0.1:8000/openapi.json> | Raw OpenAPI 3.1 schema, for client generators and Postman/Insomnia imports |
 
 If you changed `CONTACTS_HOST` or `CONTACTS_PORT`, substitute those instead.
@@ -36,14 +36,14 @@ If you changed `CONTACTS_HOST` or `CONTACTS_PORT`, substitute those instead.
 ### Trying a request in Swagger UI
 
 1. Expand an endpoint, e.g. `POST /api/v1/contacts`.
-2. Click **Try it out** — the request body becomes editable and is pre-filled with an
+2. Click **Try it out**; the request body becomes editable and is pre-filled with an
    example.
 3. Edit the JSON and click **Execute**.
 4. The response status, body, and headers appear below, along with the equivalent
    `curl` command you can copy.
 
 Since the default database is seeded on startup, `GET /api/v1/contacts` returns three
-contacts immediately — a good first call to confirm things work. Anything you create
+contacts immediately. That is a good first call to confirm things work. Anything you create
 through the UI lives only until the process exits.
 
 ### Reading the schemas
@@ -51,7 +51,7 @@ through the UI lives only until the process exits.
 Both UIs list every model under **Schemas** (ReDoc) or **Schemas** at the bottom of the
 page (Swagger UI). `ContactCreate`, `ContactReplace` (PUT), `ContactUpdate` (PATCH),
 `ContactRead`, and `ContactPage` show exactly which fields are required, which are
-nullable, and the validation rules — the same constraints described in
+nullable, and the validation rules. These are the same constraints described in
 [Contact fields](#contact-fields) below. Endpoints are grouped
 by the tags declared in `app/main.py`, and each documents its error responses (`404`,
 `409`, `422`) with example payloads.
@@ -64,7 +64,7 @@ pass `docs_url=None` / `redoc_url=None` to `FastAPI(...)` in `app/main.py`.
 `CONTACTS_DATABASE_URL` defaults to `sqlite+pysqlite:///:memory:`. A plain in-memory
 SQLite database normally dies with the connection that opened it, so `app/database.py`
 uses SQLAlchemy's `StaticPool` to hold one connection open for the process's lifetime.
-Every request — including ones FastAPI runs on a worker thread — sees the same data.
+Every request, including ones FastAPI runs on a worker thread, sees the same data.
 
 **Data is lost when the process exits.** Because of that, three sample contacts are
 seeded on startup so the API is never empty. To persist instead, point at a file:
@@ -73,7 +73,12 @@ seeded on startup so the API is never empty. To persist instead, point at a file
 CONTACTS_DATABASE_URL="sqlite+pysqlite:///./contacts.db" .venv/bin/python -m app.main
 ```
 
-The same code runs unchanged against Postgres (`postgresql+psycopg://...`).
+The same code runs against Postgres (`postgresql+psycopg://...`) after installing the
+driver extra:
+
+```bash
+.venv/bin/python -m pip install -e ".[postgres]"
+```
 
 ### Configuration
 
@@ -104,14 +109,19 @@ also read):
 ### Contact fields
 
 `first_name` and `last_name` are required; `email` is required and unique
-(case-insensitive). Everything else is optional.
+(case-insensitive). Everything else is optional. A contact owns up to ten
+typed addresses. Each address requires a `type` (`Home`, `Work`, or `Other`)
+and a non-blank street `address`; its remaining postal fields are optional.
 
 ```
 first_name, last_name, email, phone, company, job_title,
-address, city, state, postal_code, country, notes
+addresses: [{ type, address, city, state, postal_code, country }], notes
 ```
 
-Responses add `id`, `full_name`, `created_at`, and `updated_at` (UTC).
+`PUT` replaces the complete address collection. For `PATCH`, omitting
+`addresses` preserves it, while sending `[]` or `null` clears it. Responses add
+an `id` to every address and add `id`, `full_name`, `created_at`, and
+`updated_at` (UTC) to the contact.
 
 ### List query parameters
 
@@ -141,7 +151,9 @@ List responses are wrapped so clients can paginate:
 curl -X POST http://127.0.0.1:8000/api/v1/contacts \
   -H 'content-type: application/json' \
   -d '{"first_name":"Katherine","last_name":"Johnson","email":"katherine@example.com",
-       "phone":"+1-757-555-0199","company":"NASA","job_title":"Mathematician"}'
+       "phone":"+1-757-555-0199","company":"NASA","job_title":"Mathematician",
+       "addresses":[{"type":"Work","address":"1 NASA Dr","city":"Hampton",
+                     "state":"VA","postal_code":"23666","country":"USA"}]}'
 
 # Search + paginate
 curl "http://127.0.0.1:8000/api/v1/contacts?search=nasa&limit=10&sort_by=last_name"
@@ -162,6 +174,9 @@ curl -X DELETE http://127.0.0.1:8000/api/v1/contacts/1
 
 Tests run against their own empty in-memory database with seeding disabled
 (see `tests/conftest.py`).
+
+GitHub Actions runs the full suite on Python 3.11 through 3.14 for every pull request
+and every push to `trunk`.
 
 ## Layout
 

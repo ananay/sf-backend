@@ -18,6 +18,30 @@ def test_create_contact(client, payload):
     assert body["email"] == "ada@example.com"
     assert body["full_name"] == "Ada Lovelace"
     assert body["created_at"] and body["updated_at"]
+    assert body["addresses"][0]["type"] == "Work"
+    assert body["addresses"][0]["id"] > 0
+
+
+def test_contact_supports_multiple_typed_addresses(client, payload):
+    addresses = [
+        {"type": "Home", "address": "12 Home St", "city": "London"},
+        {"type": "Work", "address": "34 Work Ave", "city": "London"},
+        {"type": "Other", "address": "PO Box 56"},
+    ]
+
+    response = client.post(BASE, json={**payload, "addresses": addresses})
+
+    assert response.status_code == 201
+    assert [item["type"] for item in response.json()["addresses"]] == ["Home", "Work", "Other"]
+    assert len({item["id"] for item in response.json()["addresses"]}) == 3
+
+
+def test_contact_rejects_invalid_or_blank_address(client, payload):
+    invalid_type = [{"type": "Vacation", "address": "1 Beach Rd"}]
+    blank_street = [{"type": "Home", "address": "   "}]
+
+    assert client.post(BASE, json={**payload, "addresses": invalid_type}).status_code == 422
+    assert client.post(BASE, json={**payload, "addresses": blank_street}).status_code == 422
 
 
 def test_create_contact_with_photo(client, payload):
@@ -115,6 +139,20 @@ def test_patch_updates_only_sent_fields(client, payload):
     assert body["phone"] == "+1-000-000-0000"
     assert body["first_name"] == "Ada"
     assert body["company"] == "Analytical Engines"
+    assert len(body["addresses"]) == 1
+
+
+def test_patch_replaces_or_clears_addresses(client, payload):
+    contact_id = client.post(BASE, json=payload).json()["id"]
+    replacement = [{"type": "Home", "address": "99 New St"}]
+
+    replaced = client.patch(f"{BASE}/{contact_id}", json={"addresses": replacement})
+    cleared = client.patch(f"{BASE}/{contact_id}", json={"addresses": []})
+
+    assert replaced.status_code == 200
+    assert replaced.json()["addresses"][0]["address"] == "99 New St"
+    assert cleared.status_code == 200
+    assert cleared.json()["addresses"] == []
 
 
 def test_photo_can_be_added_and_cleared_with_patch(client, payload):

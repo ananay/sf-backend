@@ -16,6 +16,9 @@ dev = [
     "pytest>=8.3",
     "httpx>=0.27",
 ]
+postgres = [
+    "psycopg[binary]>=3.2",
+]
 
 [project.scripts]
 contacts-api = "app.main:run"
