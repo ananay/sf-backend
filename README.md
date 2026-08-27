@@ -104,14 +104,19 @@ also read):
 ### Contact fields
 
 `first_name` and `last_name` are required; `email` is required and unique
-(case-insensitive). Everything else is optional.
+(case-insensitive). Everything else is optional. A contact owns up to ten
+typed addresses. Each address requires a `type` (`Home`, `Work`, or `Other`)
+and a non-blank street `address`; its remaining postal fields are optional.
 
 ```
 first_name, last_name, email, phone, company, job_title,
-address, city, state, postal_code, country, notes
+addresses: [{ type, address, city, state, postal_code, country }], notes
 ```
 
-Responses add `id`, `full_name`, `created_at`, and `updated_at` (UTC).
+`PUT` replaces the complete address collection. For `PATCH`, omitting
+`addresses` preserves it, while sending `[]` or `null` clears it. Responses add
+an `id` to every address and add `id`, `full_name`, `created_at`, and
+`updated_at` (UTC) to the contact.
 
 ### List query parameters
 
@@ -141,7 +146,9 @@ List responses are wrapped so clients can paginate:
 curl -X POST http://127.0.0.1:8000/api/v1/contacts \
   -H 'content-type: application/json' \
   -d '{"first_name":"Katherine","last_name":"Johnson","email":"katherine@example.com",
-       "phone":"+1-757-555-0199","company":"NASA","job_title":"Mathematician"}'
+       "phone":"+1-757-555-0199","company":"NASA","job_title":"Mathematician",
+       "addresses":[{"type":"Work","address":"1 NASA Dr","city":"Hampton",
+                     "state":"VA","postal_code":"23666","country":"USA"}]}'
 
 # Search + paginate
 curl "http://127.0.0.1:8000/api/v1/contacts?search=nasa&limit=10&sort_by=last_name"
